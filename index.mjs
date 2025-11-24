@@ -10,6 +10,8 @@ import fs from 'fs';
 import { glob } from 'glob';
 import { fileURLToPath } from 'url';
 import { executeHtmlMigrations, executeJscodeshiftMigrations } from './migration-utils.mjs';
+import { executeIDReplacements } from './id-replacement-utils.mjs';
+import { getIDTracker } from './id-tracker.mjs';
 import { logInfo, logError, logSuccess, logWarn, logBreak } from './log.mjs';
 
 const filename = fileURLToPath(import.meta.url);
@@ -191,6 +193,31 @@ try {
         });
         modifiedJSFiles.forEach(file => changedFiles.add(file));
       }
+    }
+  }
+
+  // ID Replacements (run after all migrations to replace tracked IDs)
+  if (migrate) {
+    try {
+      const tracker = getIDTracker();
+      if (tracker.hasReplacements()) {
+        logInfo(`Found ${tracker.getReplacements().size} ID replacement(s) tracked during migration\n`);
+
+        const modifiedIdFiles = await executeIDReplacements({
+          rootPath,
+          dryRun,
+          ignoreGlobs
+        });
+
+        modifiedIdFiles.forEach(file => changedFiles.add(file));
+
+        if (modifiedIdFiles.length > 0) {
+          logSuccess(`✓ ID replacements completed. ${modifiedIdFiles.length} additional file(s) modified.\n`);
+        }
+      }
+    } catch (e) {
+      logError(`Error during ID replacements: ${e.message}`);
+      logError(e.stack);
     }
   }
 
