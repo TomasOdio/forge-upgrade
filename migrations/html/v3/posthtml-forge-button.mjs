@@ -1,15 +1,7 @@
 import matchHelper from 'posthtml-match-helper';
 import { findChildNode, removeNode, moveChildren, hasAttr, findAllChildNodes } from '../posthtml-helpers.mjs';
-import { getIDTracker } from '../../../id-tracker.mjs';
 
-// Global variable to track current file path (set by the migration system)
-let currentFilePath = 'unknown';
-
-export default function transform(tree, options = {}) {
-  // Set the current file path for ID tracking
-  if (options.filePath) {
-    currentFilePath = options.filePath;
-  }
+export default function transform(tree) {
   // Toggle icon buttons
   tree.match(matchHelper('forge-icon-button[toggle]'), node => {
     const onElement = findChildNode(node, child => child.attrs && 'forge-icon-button-on' in child.attrs);
@@ -48,18 +40,6 @@ export default function transform(tree, options = {}) {
     }
 
     migrateButtonAttributes(node, nestedButton);
-
-    // Handle ID conflicts - track replacements if both elements have IDs
-    const forgeButtonId = node.attrs?.id;
-    const nestedButtonId = nestedButton.attrs?.id;
-
-    if (forgeButtonId && nestedButtonId && forgeButtonId !== nestedButtonId) {
-      // Keep the nested button ID and track the forge-button ID for replacement
-      const tracker = getIDTracker();
-      tracker.trackReplacement(forgeButtonId, nestedButtonId, currentFilePath);
-
-      console.log(`ID conflict resolved: forge-button id="${forgeButtonId}" replaced with button id="${nestedButtonId}" in ${currentFilePath}`);
-    }
 
     // Copy all attributes from the nested button to the forge button
     if (nestedButton.attrs) {
