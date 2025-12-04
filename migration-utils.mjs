@@ -1,6 +1,4 @@
 import posthtml from 'posthtml';
-// import parser from 'posthtml-parser';
-// import render from 'posthtml-render';
 import { run as jscodeshift } from 'jscodeshift/src/Runner.js';
 import cpath from 'canonical-path';
 import { pathToFileURL } from 'url';
@@ -10,6 +8,7 @@ import crypto from 'crypto';
 import ora from 'ora';
 import { logBreak, logError, logInfo } from './log.mjs';
 import { fileURLToPath } from 'url';
+import * as cheerio from 'cheerio';
 
 const filename = fileURLToPath(import.meta.url);
 const packageRoot = cpath.join(cpath.dirname(fs.realpathSync(filename)));
@@ -18,7 +17,8 @@ const packageRoot = cpath.join(cpath.dirname(fs.realpathSync(filename)));
  * Executes HTML migrations.
  */
 export async function executeHtmlMigrations({ files, migrations, dryRun }) {
-  const spinner = ora(`Executing HTML migrations... ${migrations.map(m => `\n  - ${m.name}`).join('')}`).start();
+  const migrationList = migrations.map(m => `\n  - ${m.name}`).join('');
+  const spinner = ora(`Executing HTML migrations...${migrationList}`).start();
   const modifiedFiles = new Set();
 
   try {
@@ -32,7 +32,7 @@ export async function executeHtmlMigrations({ files, migrations, dryRun }) {
         const exported = module.default ?? module;
 
         // Only treat the button migration as a factory
-        const isButtonMigration = /posthtml-forge-button\.mjs$/.test(path);
+        const isButtonMigration = path.endsWith('posthtml-forge-button.mjs');
         const plugin = isButtonMigration
             ? exported({ fileName: filePath, dryRun })
             : exported;
@@ -42,7 +42,10 @@ export async function executeHtmlMigrations({ files, migrations, dryRun }) {
 
       const result = await posthtml(plugins).process(contents, {
         singleTag: true,
-        closingSingleTag: 'slash'
+        closingSingleTag: 'slash',
+        recognizeSelfClosing: true,
+        // Add JSP tags to self-closing list
+        voidTags: ['xt:script', 'xt:include', 'xt:param']
       });
       const html = result.html.replace(/(?<!\salt)=""/g, '');
       
@@ -65,6 +68,57 @@ export async function executeHtmlMigrations({ files, migrations, dryRun }) {
   return modifiedFiles;
 }
 
+/**
+ * Executes JSP migrations using Cheerio in XML mode.
+ */
+export async function executeJspMigrations({ files, migrations, dryRun }) {
+  const migrationList = migrations.map(m => `\n  - ${m.name}`).join('');
+  const spinner = ora(`Executing JSP migrations...${migrationList}`).start();
+  const modifiedFiles = new Set();
+
+  try {
+    for (const filePath of files) {
+      const contents = fs.readFileSync(filePath, 'utf-8');
+
+      // Use Cheerio in XML mode to preserve JSP tags
+      const $ = cheerio.load(contents, {
+        xmlMode: true,
+        decodeEntities: false,
+        recognizeSelfClosing: true,
+        preserveWhitespace: true
+      });
+
+      // Apply migrations
+      for (const { path } of migrations) {
+        const modulePath = pathToFileURL(cpath.join(packageRoot, path));
+        const module = await import(modulePath);
+        const migration = module.default ?? module;
+
+        // JSP migrations receive the cheerio instance, file path, and dry run flag
+        await migration($, filePath, dryRun);
+      }
+
+      const result = $.html();
+
+      if (result !== contents) {
+        modifiedFiles.add(filePath);
+
+        if (!dryRun) {
+          fs.writeFileSync(filePath, result, 'utf-8');
+        }
+      }
+    }
+
+    spinner.succeed();
+    logBreak();
+  } catch (e) {
+    spinner.fail();
+    logError(e.stack);
+  }
+
+  return modifiedFiles;
+}
+
 function computeFileHash(path) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -79,7 +133,8 @@ function computeFileHash(path) {
  * Executes jscodeshift migrations.
  */
 export async function executeJscodeshiftMigrations({ files, migrations, dryRun, verbose, parser }) {
-  const spinner = ora(`Executing ${parser === 'tsx' ? 'JSX/TSX' : 'JS/TS'} migrations... ${migrations.map(m => `\n  - ${m.name}`).join('')}`).start();
+  const migrationList = migrations.map(m => `\n  - ${m.name}`).join('');
+  const spinner = ora(`Executing ${parser === 'tsx' ? 'JSX/TSX' : 'JS/TS'} migrations...${migrationList}`).start();
   const modifiedFiles = new Set();
   const options = {
     dry: dryRun,

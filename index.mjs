@@ -9,7 +9,7 @@ import { hideBin } from 'yargs/helpers';
 import fs from 'fs';
 import { glob } from 'glob';
 import { fileURLToPath } from 'url';
-import { executeHtmlMigrations, executeJscodeshiftMigrations } from './migration-utils.mjs';
+import { executeHtmlMigrations, executeJscodeshiftMigrations, executeJspMigrations } from './migration-utils.mjs';
 import { logInfo, logError, logSuccess, logWarn, logBreak } from './log.mjs';
 
 const filename = fileURLToPath(import.meta.url);
@@ -48,6 +48,20 @@ const CONFIGURATION_MIGRATION_MAP = {
       { name: 'Forge Badge', path: './migrations/html/v3/posthtml-forge-badge.mjs' },
       { name: 'Forge Field', path: './migrations/html/v3/posthtml-forge-field.mjs' },
       { name: 'Forge Button Toggle', path: './migrations/html/v3/posthtml-forge-button-toggle.mjs' },
+    ],
+    jsp: [
+      { name: 'Forge Typography Class', path: './migrations/jsp/v3/cheerio-forge-typography.mjs' },
+      { name: 'Forge Card', path: './migrations/jsp/v3/cheerio-forge-card.mjs' },
+      { name: 'Forge Density', path: './migrations/jsp/v3/cheerio-forge-density.mjs' },
+      { name: 'Forge Buttons', path: './migrations/jsp/v3/cheerio-forge-button.mjs' },
+      { name: 'Forge Checkboxes, Radios, Switches', path: './migrations/jsp/v3/cheerio-forge-checkbox-radio-switch.mjs' },
+      { name: 'Forge Lists and List Items', path: './migrations/jsp/v3/cheerio-forge-list.mjs' },
+      { name: 'Forge Tabs', path: './migrations/jsp/v3/cheerio-forge-tabs.mjs' },
+      { name: 'Forge Tooltip', path: './migrations/jsp/v3/cheerio-forge-tooltip.mjs' },
+      { name: 'Forge Label Value', path: './migrations/jsp/v3/cheerio-forge-label-value.mjs' },
+      { name: 'Forge Badge', path: './migrations/jsp/v3/cheerio-forge-badge.mjs' },
+      { name: 'Forge Field', path: './migrations/jsp/v3/cheerio-forge-field.mjs' },
+      { name: 'Forge Button Toggle', path: './migrations/jsp/v3/cheerio-forge-button-toggle.mjs' },
     ],
     jsx: [
       { name: 'Forge Card', path: './migrations/jsx/v3/jscodeshift-forge-card.cjs' },
@@ -141,7 +155,7 @@ try {
     // HTML
     const htmlMigrations = CONFIGURATION_MIGRATION_MAP[configuration].html;
     if (htmlMigrations?.length) {
-      const globPath = path.join(rootPath, '**/*.{jsp, html, html.erb}');
+      const globPath = path.join(rootPath, '**/*.{ html, html.erb}');
       const htmlFiles = await glob(globPath, { ignore: [NODE_MODULES_GLOB, ...ignoreGlobs] });
       if (htmlFiles.length) {
         logInfo(`Found ${htmlMigrations.length} HTML migration(s)\n`);
@@ -152,6 +166,23 @@ try {
           dryRun
         });
         modifiedHtmlFiles.forEach(file => changedFiles.add(file));
+      }
+    }
+
+    // JSP
+    const jspMigrations = CONFIGURATION_MIGRATION_MAP[configuration].jsp;
+    if (jspMigrations?.length) {
+      const globPath = path.join(rootPath, '**/*.jsp');
+      const jspFiles = await glob(globPath, { ignore: [NODE_MODULES_GLOB, ...ignoreGlobs] });
+      if (jspFiles.length) {
+        logInfo(`Found ${jspMigrations.length} JSP migration(s)\n`);
+
+        const modifiedJspFiles = await executeJspMigrations({
+          files: jspFiles,
+          migrations: jspMigrations,
+          dryRun
+        });
+        modifiedJspFiles.forEach(file => changedFiles.add(file));
       }
     }
 
