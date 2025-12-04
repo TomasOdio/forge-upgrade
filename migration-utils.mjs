@@ -1,6 +1,6 @@
 import posthtml from 'posthtml';
 import parser from 'posthtml-parser';
-import render from 'posthtml-render';
+import * as renderModule from 'posthtml-render';
 import { run as jscodeshift } from 'jscodeshift/src/Runner.js';
 import cpath from 'canonical-path';
 import { pathToFileURL } from 'url';
@@ -20,6 +20,7 @@ const packageRoot = cpath.join(cpath.dirname(fs.realpathSync(filename)));
 export async function executeHtmlMigrations({ files, migrations, dryRun }) {
   const spinner = ora(`Executing HTML migrations... ${migrations.map(m => `\n  - ${m.name}`).join('')}`).start();
   const modifiedFiles = new Set();
+  const renderFn = typeof renderModule === 'function' ? renderModule : renderModule.default;
 
   try {
     for (const filePath of files) {
@@ -42,7 +43,7 @@ export async function executeHtmlMigrations({ files, migrations, dryRun }) {
 
       const result = await posthtml(plugins).process(contents, {
         parser: html => parser(html, { sourceCodeLocationInfo: true }),
-        render: render({
+        render: renderFn({
           // Preserve self-closing tags as "<tag/>" rather than "<tag>"
           singleTag: true,
           closingSingleTag: 'slash'
