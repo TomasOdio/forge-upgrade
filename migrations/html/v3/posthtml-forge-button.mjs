@@ -9,13 +9,15 @@ function logDeletedForgeButtonId(logEntry) {
   try {
     fs.appendFileSync(logFile, line, { encoding: 'utf8' });
   } catch (err) {
-    // Fallback: print to console if file write fails
     console.error('Failed to write to deleted-forge-button-ids.log:', err);
     console.log('Log entry:', logEntry);
   }
 }
 
-export default function transform(tree, fileName = 'unknown') {
+export default (options = {}) => tree => {
+  const fileName = options.fileName || 'unknown';
+  const dryRun = !!options.dryRun;
+
   // Toggle icon buttons
   tree.match(matchHelper('forge-icon-button[toggle]'), node => {
     const onElement = findChildNode(node, child => child.attrs && 'forge-icon-button-on' in child.attrs);
@@ -55,14 +57,15 @@ export default function transform(tree, fileName = 'unknown') {
 
     // Track id changes if both have id
     if (node.attrs?.id && nestedButton.attrs?.id) {
-      // Try to get line number if available
       const line = node.location?.start?.line ?? 'unknown';
-      logDeletedForgeButtonId({
-        originalId: node.attrs.id,
-        replacementId: nestedButton.attrs.id,
-        file: fileName,
-        line
-      });
+
+        logDeletedForgeButtonId({
+          originalId: node.attrs.id,
+          replacementId: nestedButton.attrs.id,
+          file: fileName,
+          line
+        });
+
       // Keep the nested button's id
       node.attrs.id = nestedButton.attrs.id;
     }
@@ -142,8 +145,8 @@ export default function transform(tree, fileName = 'unknown') {
   });
 
   // Move nested tooltips
-  const searchContentForButtons = (node, tree) => {
-    const children = tree ? Object.values(node).filter(value => !!value.content) : findAllChildNodes(node, child => child);
+  const searchContentForButtons = (node, treeFlag) => {
+    const children = treeFlag ? Object.values(node).filter(value => !!value.content) : findAllChildNodes(node, child => child);
     children.forEach(child => {
       if (['forge-button', 'forge-icon-button', 'forge-fab'].includes(child.tag)) {
         moveTooltip(node, child);
@@ -163,7 +166,7 @@ export default function transform(tree, fileName = 'unknown') {
     parent.content?.splice(index + 1, 0, tooltip) ?? parent.splice(index + 1, 0, tooltip);
   };
   searchContentForButtons(tree, true);
-}
+};
 
 function migrateButtonAttributes(node, nested) {
   // Translate the `type` attribute to the `variant` and `dense` attributes

@@ -1,5 +1,6 @@
-
 import posthtml from 'posthtml';
+import parser from 'posthtml-parser';
+import render from 'posthtml-render';
 import { run as jscodeshift } from 'jscodeshift/src/Runner.js';
 import cpath from 'canonical-path';
 import { pathToFileURL } from 'url';
@@ -28,11 +29,16 @@ export async function executeHtmlMigrations({ files, migrations, dryRun }) {
       for (const { path } of migrations) {
         const modulePath = pathToFileURL(cpath.join(packageRoot, path));
         const module = await import(modulePath);
-        const plugin = module.default ?? module;
-        plugins.push(plugin);
+        const pluginFactory = module.default ?? module;
+        // Ensure we pass fileName and dryRun into the plugin
+        plugins.push(pluginFactory({ fileName: filePath, dryRun }));
       }
 
-      const result = await posthtml(plugins).process(contents);
+      // Use parser with source location info so plugins can read node.location.start.line
+      const result = await posthtml(plugins).process(contents, {
+        parser: html => parser(html, { sourceCodeLocationInfo: true }),
+        render
+      });
       const html = result.html.replace(/(?<!\salt)=""/g, '');
       
       if (html !== contents) {

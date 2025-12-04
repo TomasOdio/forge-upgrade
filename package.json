@@ -41,6 +41,8 @@
     "posthtml": "^0.16.6",
     "posthtml-attrs-parser": "^1.1.1",
     "posthtml-match-helper": "^2.0.2",
+    "posthtml-parser": "^0.12.1",
+    "posthtml-render": "^3.0.0",
     "replace-in-file": "^8.1.0",
     "yargs": "^17.7.2"
   },
