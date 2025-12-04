@@ -1,7 +1,21 @@
 import matchHelper from 'posthtml-match-helper';
 import { findChildNode, removeNode, moveChildren, hasAttr, findAllChildNodes } from '../posthtml-helpers.mjs';
+import fs from 'fs';
+import path from 'path';
 
-export default function transform(tree) {
+function logDeletedForgeButtonId(logEntry) {
+  const logFile = path.resolve(process.cwd(), 'deleted-forge-button-ids.log');
+  const line = JSON.stringify(logEntry) + '\n';
+  try {
+    fs.appendFileSync(logFile, line, { encoding: 'utf8' });
+  } catch (err) {
+    // Fallback: print to console if file write fails
+    console.error('Failed to write to deleted-forge-button-ids.log:', err);
+    console.log('Log entry:', logEntry);
+  }
+}
+
+export default function transform(tree, fileName = 'unknown') {
   // Toggle icon buttons
   tree.match(matchHelper('forge-icon-button[toggle]'), node => {
     const onElement = findChildNode(node, child => child.attrs && 'forge-icon-button-on' in child.attrs);
@@ -37,6 +51,20 @@ export default function transform(tree) {
     const nestedButton = findChildNode(node, child => child.tag === 'button');
     if (!nestedButton) {
       return node;
+    }
+
+    // Track id changes if both have id
+    if (node.attrs?.id && nestedButton.attrs?.id) {
+      // Try to get line number if available
+      const line = node.location?.start?.line ?? 'unknown';
+      logDeletedForgeButtonId({
+        originalId: node.attrs.id,
+        replacementId: nestedButton.attrs.id,
+        file: fileName,
+        line
+      });
+      // Keep the nested button's id
+      node.attrs.id = nestedButton.attrs.id;
     }
 
     migrateButtonAttributes(node, nestedButton);
