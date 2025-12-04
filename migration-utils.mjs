@@ -72,48 +72,61 @@ export async function executeHtmlMigrations({ files, migrations, dryRun }) {
  * Executes JSP migrations using Cheerio in XML mode.
  */
 export async function executeJspMigrations({ files, migrations, dryRun }) {
-  const migrationList = migrations.map(m => `\n  - ${m.name}`).join('');
-  const spinner = ora(`Executing JSP migrations...${migrationList}`).start();
-  const modifiedFiles = new Set();
+  const modifiedFiles = [];
 
-  try {
-    for (const filePath of files) {
-      const contents = fs.readFileSync(filePath, 'utf-8');
+  for (const file of files) {
+    try {
+      let content = fs.readFileSync(file, 'utf-8');
+      let modified = false;
 
-      // Use Cheerio in XML mode to preserve JSP tags
-      const $ = cheerio.load(contents, {
-        xmlMode: true,
-        decodeEntities: false,
-        recognizeSelfClosing: true,
-        preserveWhitespace: true
+      // Store JSP directives and restore them after processing
+      const jspDirectives = [];
+      const directivePattern = /<%@[^%]*%>/g;
+
+      // Extract JSP directives
+      content = content.replace(directivePattern, (match, offset) => {
+        const placeholder = `<!-- JSP_DIRECTIVE_${jspDirectives.length} -->`;
+        jspDirectives.push(match);
+        return placeholder;
       });
 
-      // Apply migrations
-      for (const { path } of migrations) {
-        const modulePath = pathToFileURL(cpath.join(packageRoot, path));
-        const module = await import(modulePath);
-        const migration = module.default ?? module;
+      const $ = cheerio.load(content, {
+        xmlMode: true,
+        decodeEntities: false,
+        lowerCaseAttributeNames: false
+      });
 
-        // JSP migrations receive the cheerio instance, file path, and dry run flag
-        await migration($, filePath, dryRun);
-      }
+      for (const migration of migrations) {
+        const migrationPath = path.join(packageRoot, migration.path);
+        const { default: migrationFn } = await import(migrationPath);
 
-      const result = $.html();
+        const initialHtml = $.html();
+        migrationFn($, file, dryRun);
+        const finalHtml = $.html();
 
-      if (result !== contents) {
-        modifiedFiles.add(filePath);
-
-        if (!dryRun) {
-          fs.writeFileSync(filePath, result, 'utf-8');
+        if (initialHtml !== finalHtml) {
+          modified = true;
         }
       }
-    }
 
-    spinner.succeed();
-    logBreak();
-  } catch (e) {
-    spinner.fail();
-    logError(e.stack);
+      if (modified) {
+        let result = $.html();
+
+        // Restore JSP directives
+        jspDirectives.forEach((directive, index) => {
+          const placeholder = `<!-- JSP_DIRECTIVE_${index} -->`;
+          result = result.replace(placeholder, directive);
+        });
+
+        if (!dryRun) {
+          fs.writeFileSync(file, result, 'utf-8');
+        }
+        modifiedFiles.push(file);
+        logInfo(`✓ ${migration.name}: ${file}`);
+      }
+    } catch (error) {
+      logError(`Failed to process ${file}: ${error.message}`);
+    }
   }
 
   return modifiedFiles;

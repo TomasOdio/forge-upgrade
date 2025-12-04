@@ -121,8 +121,12 @@ export default function migrateForgeButton($, fileName, dryRun) {
     const $tooltip = $button.find('forge-tooltip').first();
 
     if ($tooltip.length) {
-      $tooltip.detach();
-      $button.after($tooltip);
+      const tooltipClone = $tooltip.clone();
+
+      // Remove from current the current location
+      $tooltip.remove();
+
+      $button.after(tooltipClone);
     }
   });
 }
