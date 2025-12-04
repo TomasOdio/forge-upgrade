@@ -1,6 +1,6 @@
 import posthtml from 'posthtml';
 import parser from 'posthtml-parser';
-import render from 'posthtml-render';
+import { createRequire } from 'module';
 import { run as jscodeshift } from 'jscodeshift/src/Runner.js';
 import cpath from 'canonical-path';
 import { pathToFileURL } from 'url';
@@ -13,6 +13,9 @@ import { fileURLToPath } from 'url';
 
 const filename = fileURLToPath(import.meta.url);
 const packageRoot = cpath.join(cpath.dirname(fs.realpathSync(filename)));
+const require = createRequire(import.meta.url);
+// Resolve posthtml-render as a callable function from CJS
+const renderFn = require('posthtml-render');
 
 /**
  * Executes HTML migrations.
@@ -42,8 +45,7 @@ export async function executeHtmlMigrations({ files, migrations, dryRun }) {
 
       const result = await posthtml(plugins).process(contents, {
         parser: html => parser(html, { sourceCodeLocationInfo: true }),
-        render: render({
-          // Preserve self-closing tags as "<tag/>" rather than "<tag>"
+        render: renderFn({
           singleTag: true,
           closingSingleTag: 'slash'
         })
