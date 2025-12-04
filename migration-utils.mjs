@@ -29,8 +29,7 @@ export async function executeHtmlMigrations({ files, migrations, dryRun }) {
         const modulePath = pathToFileURL(cpath.join(packageRoot, path));
         const module = await import(modulePath);
         const plugin = module.default ?? module;
-        // Create a plugin function that passes options
-        plugins.push((tree) => plugin(tree, { filePath }));
+        plugins.push(plugin);
       }
 
       const result = await posthtml(plugins).process(contents);

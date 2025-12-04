@@ -10,8 +10,6 @@ import fs from 'fs';
 import { glob } from 'glob';
 import { fileURLToPath } from 'url';
 import { executeHtmlMigrations, executeJscodeshiftMigrations } from './migration-utils.mjs';
-import { executeIDReplacements } from './id-replacement-utils.mjs';
-import { getIDTracker } from './id-tracker.mjs';
 import { logInfo, logError, logSuccess, logWarn, logBreak } from './log.mjs';
 
 const filename = fileURLToPath(import.meta.url);
@@ -143,7 +141,7 @@ try {
     // HTML
     const htmlMigrations = CONFIGURATION_MIGRATION_MAP[configuration].html;
     if (htmlMigrations?.length) {
-      const globPath = path.join(rootPath, '**/*.{jsp, html, html.erb}');
+      const globPath = path.join(rootPath, '**/*.{html, html.erb}');
       const htmlFiles = await glob(globPath, { ignore: [NODE_MODULES_GLOB, ...ignoreGlobs] });
       if (htmlFiles.length) {
         logInfo(`Found ${htmlMigrations.length} HTML migration(s)\n`);
@@ -193,31 +191,6 @@ try {
         });
         modifiedJSFiles.forEach(file => changedFiles.add(file));
       }
-    }
-  }
-
-  // ID Replacements (run after all migrations to replace tracked IDs)
-  if (migrate) {
-    try {
-      const tracker = getIDTracker();
-      if (tracker.hasReplacements()) {
-        logInfo(`Found ${tracker.getReplacements().size} ID replacement(s) tracked during migration\n`);
-
-        const modifiedIdFiles = await executeIDReplacements({
-          rootPath,
-          dryRun,
-          ignoreGlobs
-        });
-
-        modifiedIdFiles.forEach(file => changedFiles.add(file));
-
-        if (modifiedIdFiles.length > 0) {
-          logSuccess(`✓ ID replacements completed. ${modifiedIdFiles.length} additional file(s) modified.\n`);
-        }
-      }
-    } catch (e) {
-      logError(`Error during ID replacements: ${e.message}`);
-      logError(e.stack);
     }
   }
 
