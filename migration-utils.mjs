@@ -28,9 +28,15 @@ export async function executeHtmlMigrations({ files, migrations, dryRun }) {
       for (const { path } of migrations) {
         const modulePath = pathToFileURL(cpath.join(packageRoot, path));
         const module = await import(modulePath);
-        const pluginFactory = module.default ?? module;
-        // Ensure we pass fileName and dryRun into the plugin
-        plugins.push(pluginFactory({ fileName: filePath, dryRun }));
+        const exported = module.default ?? module;
+
+        // Only treat the button migration as a factory
+        const isButtonMigration = /posthtml-forge-button\.mjs$/.test(path);
+        const plugin = isButtonMigration
+            ? exported({ fileName: filePath, dryRun })
+            : exported;
+
+        plugins.push(plugin);
       }
 
       const result = await posthtml(plugins).process(contents);
